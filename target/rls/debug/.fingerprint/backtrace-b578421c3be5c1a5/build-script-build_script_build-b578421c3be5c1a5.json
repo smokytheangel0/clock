@@ -1,0 +1,1 @@
+{"rustc":14482131511702393637,"features":"[\"backtrace-sys\", \"dbghelp\", \"default\", \"dladdr\", \"libbacktrace\", \"libunwind\", \"std\"]","target":10088282520713642473,"profile":9935990280773120926,"path":4696385791303356596,"deps":[["autocfg v0.1.4","autocfg",16426363546088741793]],"local":[{"Precalculated":"0.3.31"}],"rustflags":[],"metadata":7223263141473362705}

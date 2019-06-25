@@ -1,0 +1,8 @@
+{
+    "map": {
+        "rusty_flutter": "/Users/j/Desktop/Code/rusty_flutter",
+        "FinSCRAPE": "/Users/j/Desktop/Code/FinSCRAPE",
+        "stack_setup": "/Users/j/Desktop/Code/stack_setup",
+        "clock": "/Users/j/Desktop/Code/clock"
+    }
+}
