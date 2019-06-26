@@ -29,6 +29,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Sender, Receiver};
 use std::default::Default;
 
+#[macro_use] extern crate self_update;
 
 use termion::event::Key;
 use termion::cursor::Goto;
@@ -357,6 +358,8 @@ fn main() {
     //ui continues on main thread
     tree(to_logic, from_logic, &mut app);
     logic_thread.join().expect("failed to join logic thread after shutdown");
+    update();
+
 
 }
 
@@ -584,3 +587,22 @@ fn init_storage(data: &String) -> BridgeResult {
         format!("created the table: {} successfully with columns: {}", arguments.table, arguments.columns)
     )
 }
+
+fn update() {
+    println!("checking for update...");
+    let target = self_update::get_target().expect("failed to get target for update");
+
+    let status = self_update::backends::github::Update::configure().expect("failed to start configuration")
+        .repo_owner("smokytheangel0")
+        .repo_name("clock")
+        .target(&target)
+        .bin_name("clock")
+        .show_download_progress(true)
+        .current_version(cargo_crate_version!())
+        .build().expect("failed to build update")
+        .update().expect("failed to update binary");
+
+    println!("Update status: {}!", status.version());
+
+}
+

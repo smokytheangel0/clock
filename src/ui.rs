@@ -86,383 +86,385 @@ struct ToLogicValue {
 }
 
 pub fn tree(tx: Sender<(String, String)>, rx: Receiver<(String)>, mut app: &mut App) {
-    let stdout = io::stdout().into_raw_mode().expect("failed to put stdout into raw mode");
-    let stdout = MouseTerminal::from(stdout);
-    let stdout = AlternateScreen::from(stdout);
-    let backend = TermionBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).expect("failed to setup termion");
+    //scope the main part of this function so it drops the terminal before updating
+    {
+        let stdout = io::stdout().into_raw_mode().expect("failed to put stdout into raw mode");
+        let stdout = MouseTerminal::from(stdout);
+        let stdout = AlternateScreen::from(stdout);
+        let backend = TermionBackend::new(stdout);
+        let mut terminal = Terminal::new(backend).expect("failed to setup termion");
 
-    let events = Events::new();
+        let events = Events::new();
 
-    //emotify call
-    let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
+        //emotify call
+        let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
 
-    let mut mood = String::new();
-    let mut learning = String::new();
+        let mut mood = String::new();
+        let mut learning = String::new();
 
-    if emotify_output.result != "Ok()" {
-        push_error(emotify_output.data, &mut app);
-    } else {
-        mood = emotify_output.data[0].clone();
-        learning = emotify_output.data[1].clone();
-    }
-    app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
-    //end emotify
-
-    //start call
-    let output_app = AtoA_BridgeCall("start", &mut app, &tx, &rx);
-    app.tests = output_app.tests;
-    push_error(output_app.result, &mut app);
-    //end start
-
-    loop {
-        //idle_time call
-        let output_app = AtoA_BridgeCall("idle_time", &mut app, &tx, &rx);
-        app.idle = output_app.idle;
-        push_error(output_app.result, &mut app);
-        //end idle_time
-
-
-        if app.idle > 180.0 && app.state == "play" {
-            //pause call
-            let output_app = AtoA_BridgeCall("pause", &mut app, &tx, &rx);
-            app.tests = output_app.tests;
-            app.state = output_app.state;
-            push_error(output_app.result, &mut app);
-            //end pause
+        if emotify_output.result != "Ok()" {
+            push_error(emotify_output.data, &mut app);
+        } else {
+            mood = emotify_output.data[0].clone();
+            learning = emotify_output.data[1].clone();
         }
-        if app.state == "pause" && app.idle < 180.0 {
-            //play call
-            let app_struct = ToLogicApp {
-                app: app.clone()
-            };
-            let app_string = match serde_json::to_string(&app_struct) {
-                Ok(string) => string,
-                Err(err) => {app.result.push(format!("Err(): failed to encode app string for play call: {}", err)); String::new()}
-            };
+        app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
+        //end emotify
 
-            match tx.send(("play".to_string(), app_string)) {
-                Ok(_) => (),
-                Err(err) => {app.result.push(format!{"Err(): failed to send play call and data to logic thread: {}", err})}
-            };
+        //start call
+        let output_app = AtoA_BridgeCall("start", &mut app, &tx, &rx);
+        app.tests = output_app.tests;
+        push_error(output_app.result, &mut app);
+        //end start
 
-            let output_string = match rx.recv() {
-                Ok(output) => output,
-                Err(err) => {app.result.push(format!("Err(): failed to receive result from play call: {}", err)); String::new()}
-            };
+        loop {
+            //idle_time call
+            let output_app = AtoA_BridgeCall("idle_time", &mut app, &tx, &rx);
+            app.idle = output_app.idle;
+            push_error(output_app.result, &mut app);
+            //end idle_time
 
-            let play_output: BridgeResult = match serde_json::from_str(&output_string) {
-                Ok(output) => output,
-                Err(err) => {app.result.push(format!("Err(): failed to decode result string from play call: {}", err)); BridgeResult::default()}
-            };
 
-            if play_output.result != "Ok()" {
-                app.result.push(play_output.data[0].clone());
-            } else {
-                let mut output_app: App = match serde_json::from_str(&play_output.data[0]) {
-                    Ok(output) => output,
-                    Err(err) => {app.result.push(format!("Err(): failed to decode app struct from play call: {}", err)); App::default()}
-                };
+            if app.idle > 180.0 && app.state == "play" {
+                //pause call
+                let output_app = AtoA_BridgeCall("pause", &mut app, &tx, &rx);
                 app.tests = output_app.tests;
                 app.state = output_app.state;
-                for result in output_app.result.clone() {
-                    if !app.result.contains(&result) {
-                        app.result.append(& mut output_app.result);
+                push_error(output_app.result, &mut app);
+                //end pause
+            }
+            if app.state == "pause" && app.idle < 180.0 {
+                //play call
+                let app_struct = ToLogicApp {
+                    app: app.clone()
+                };
+                let app_string = match serde_json::to_string(&app_struct) {
+                    Ok(string) => string,
+                    Err(err) => {app.result.push(format!("Err(): failed to encode app string for play call: {}", err)); String::new()}
+                };
+
+                match tx.send(("play".to_string(), app_string)) {
+                    Ok(_) => (),
+                    Err(err) => {app.result.push(format!{"Err(): failed to send play call and data to logic thread: {}", err})}
+                };
+
+                let output_string = match rx.recv() {
+                    Ok(output) => output,
+                    Err(err) => {app.result.push(format!("Err(): failed to receive result from play call: {}", err)); String::new()}
+                };
+
+                let play_output: BridgeResult = match serde_json::from_str(&output_string) {
+                    Ok(output) => output,
+                    Err(err) => {app.result.push(format!("Err(): failed to decode result string from play call: {}", err)); BridgeResult::default()}
+                };
+
+                if play_output.result != "Ok()" {
+                    app.result.push(play_output.data[0].clone());
+                } else {
+                    let mut output_app: App = match serde_json::from_str(&play_output.data[0]) {
+                        Ok(output) => output,
+                        Err(err) => {app.result.push(format!("Err(): failed to decode app struct from play call: {}", err)); App::default()}
+                    };
+                    app.tests = output_app.tests;
+                    app.state = output_app.state;
+                    for result in output_app.result.clone() {
+                        if !app.result.contains(&result) {
+                            app.result.append(& mut output_app.result);
+                        }
                     }
                 }
+                //end play
             }
-            //end play
-        }
 
-        if app.tests == 0 {
-            app.tests = app.test_map[&app.selected];
-        }
-
-        //the actual tree
-        terminal.draw(|mut f| {
-
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .margin(1)
-                //length(3) perc(80) perc(20)
-                .constraints([Constraint::Length(3), Constraint::Percentage(80), Constraint::Percentage(20)].as_ref())
-                .split(f.size());
-            Paragraph::new([Text::raw(&app.input)].iter())
-                .style(Style::default().fg(Color::Yellow))
-                .block(Block::default().borders(Borders::ALL).title("Comment"))
-                .render(&mut f, chunks[0]);            
-            {
-                let chunks = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .margin(0)
-                    .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
-                    .split(chunks[1]);
-
-                let messages = app
-                    .messages
-                    .iter()
-                    .enumerate()
-                    .map(|(i, m)| Text::raw(format!("{}: {}", i, m)));
-                List::new(messages)
-                    .block(Block::default().borders(Borders::ALL).title("Task History"))
-                    .render(&mut f, chunks[0]);
-                
-                app.metrics = vec![
-                    format!("project: {}", app.selected),
-                    format!("idle state: {}", app.state),
-                    format!("idle: {}", app.idle),
-                    format!("test count: {}", app.tests),
-                ];
-
-                let metrics = app
-                    .metrics
-                    .iter()
-                    .map(|m| Text::raw(m));
-
-                List::new(metrics)
-                    .block(Block::default().borders(Borders::ALL).title("Metrics"))
-                    .render(&mut f, chunks[1]);                
+            if app.tests == 0 {
+                app.tests = app.test_map[&app.selected];
             }
-            {
+
+            //the actual tree
+            terminal.draw(|mut f| {
+
                 let chunks = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .margin(0)
-                    .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
-                    .split(chunks[2]);
-
-                let results = app
-                    .result
-                    .iter()
-                    .map(|m| Text::raw(m));
-
-                List::new(results)
-                    .block(Block::default().borders(Borders::ALL).title("Results"))
-                    .render(&mut f, chunks[0]);                
-            
-                Paragraph::new([Text::raw(&app.flags)].iter())
+                    .direction(Direction::Vertical)
+                    .margin(1)
+                    //length(3) perc(80) perc(20)
+                    .constraints([Constraint::Length(3), Constraint::Percentage(80), Constraint::Percentage(20)].as_ref())
+                    .split(f.size());
+                Paragraph::new([Text::raw(&app.input)].iter())
                     .style(Style::default().fg(Color::Yellow))
-                    .block(Block::default().borders(Borders::ALL).title("Flags"))
-                    .render(&mut f, chunks[1]); 
-                             
-            }
-        }).expect("failed to do layout");
+                    .block(Block::default().borders(Borders::ALL).title("Comment"))
+                    .render(&mut f, chunks[0]);            
+                {
+                    let chunks = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .margin(0)
+                        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
+                        .split(chunks[1]);
 
-        write!(
-            terminal.backend_mut(),
-            "{}",
-            Goto(3 + app.input.width() as u16, 3)
-        ).expect("failed to reposition cursor to input box");
-
-        match events.next().expect("failed to get next event") {
-            Event::Input(input) => match input {
-
-                Key::Ctrl('c') => {
-                    //exit call
-                    let output_app = AtoA_BridgeCall("exit", &mut app, &tx, &rx);
-                    app.tests = output_app.tests;
-                    app.state = output_app.state;
-                    //end exit
-                    break;
-                }
-
-                Key::Char('\n') => {
-                    app.comment = app.input.drain(..).collect();
-                    let local: DateTime<Local> = Local::now();
-                    if app.comment == "" {
-                        app.comment = "updated flags".to_string();
-                    }
-                    app.messages.push(format!("{} {} '{}' T: {}:{}:{}", app.selected.clone(), app.state.clone(), app.comment.clone(), local.hour(), local.minute(), local.second()));
+                    let messages = app
+                        .messages
+                        .iter()
+                        .enumerate()
+                        .map(|(i, m)| Text::raw(format!("{}: {}", i, m)));
+                    List::new(messages)
+                        .block(Block::default().borders(Borders::ALL).title("Task History"))
+                        .render(&mut f, chunks[0]);
                     
-                    //store_input call
-                    let output_app = AtoA_BridgeCall("store_input", &mut app, &tx, &rx);
-                    app.tests = output_app.tests;
-                    push_error(output_app.result, &mut app);
-                    //end store_input
+                    app.metrics = vec![
+                        format!("project: {}", app.selected),
+                        format!("idle state: {}", app.state),
+                        format!("idle: {}", app.idle),
+                        format!("test count: {}", app.tests),
+                    ];
+
+                    let metrics = app
+                        .metrics
+                        .iter()
+                        .map(|m| Text::raw(m));
+
+                    List::new(metrics)
+                        .block(Block::default().borders(Borders::ALL).title("Metrics"))
+                        .render(&mut f, chunks[1]);                
                 }
+                {
+                    let chunks = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .margin(0)
+                        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
+                        .split(chunks[2]);
 
-                Key::Char(c) => {
-                    app.input.push(c);
+                    let results = app
+                        .result
+                        .iter()
+                        .map(|m| Text::raw(m));
+
+                    List::new(results)
+                        .block(Block::default().borders(Borders::ALL).title("Results"))
+                        .render(&mut f, chunks[0]);                
+                
+                    Paragraph::new([Text::raw(&app.flags)].iter())
+                        .style(Style::default().fg(Color::Yellow))
+                        .block(Block::default().borders(Borders::ALL).title("Flags"))
+                        .render(&mut f, chunks[1]); 
+                                
                 }
+            }).expect("failed to do layout");
 
-                Key::Backspace => {
-                    app.input.pop();
-                }
+            write!(
+                terminal.backend_mut(),
+                "{}",
+                Goto(3 + app.input.width() as u16, 3)
+            ).expect("failed to reposition cursor to input box");
 
-                //- and i are blocked from use probably a terminal mapping
-                Key::Ctrl('a') => {
-                    //binary_switch call
-                    let binary_output = VtoV_BridgeCall("binary_switch", app.mood.clone(), &mut app, &tx, &rx);
+            match events.next().expect("failed to get next event") {
+                Event::Input(input) => match input {
 
-                    if binary_output.result != "Ok()" {
-                        app.result.push(binary_output.data[0].clone());
-                    } else {
-                        app.mood = binary_output.data[0].clone().parse::<i64>().expect("failed to parse mood int from logic result");
+                    Key::Ctrl('c') => {
+                        //exit call
+                        let output_app = AtoA_BridgeCall("exit", &mut app, &tx, &rx);
+                        app.tests = output_app.tests;
+                        app.state = output_app.state;
+                        //end exit
+                        break;
                     }
-                    //end binary_switch
 
-                    //emotify call
-                    let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
-
-                    let mut mood = String::new();
-                    let mut learning = String::new();
-
-                    if emotify_output.result != "Ok()" {
-                        push_error(emotify_output.data, &mut app);
-                    } else {
-                        mood = emotify_output.data[0].clone();
-                        learning = emotify_output.data[1].clone();
+                    Key::Char('\n') => {
+                        app.comment = app.input.drain(..).collect();
+                        let local: DateTime<Local> = Local::now();
+                        if app.comment == "" {
+                            app.comment = "updated flags".to_string();
+                        }
+                        app.messages.push(format!("{} {} '{}' T: {}:{}:{}", app.selected.clone(), app.state.clone(), app.comment.clone(), local.hour(), local.minute(), local.second()));
+                        
+                        //store_input call
+                        let output_app = AtoA_BridgeCall("store_input", &mut app, &tx, &rx);
+                        app.tests = output_app.tests;
+                        push_error(output_app.result, &mut app);
+                        //end store_input
                     }
-                    app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
-                    //end emotify
-                }
-                Key::Ctrl('d') => {
-                    app.water += 1;
-                    //emotify call
-                    let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
 
-                    let mut mood = String::new();
-                    let mut learning = String::new();
-
-                    if emotify_output.result != "Ok()" {
-                        push_error(emotify_output.data, &mut app);
-                    } else {
-                        mood = emotify_output.data[0].clone();
-                        learning = emotify_output.data[1].clone();
+                    Key::Char(c) => {
+                        app.input.push(c);
                     }
-                    app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
-                    //end emotify
-                }
-                Key::Ctrl('f') => {
-                    app.alcohol += 1;
-                    //emotify call
-                    let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
 
-                    let mut mood = String::new();
-                    let mut learning = String::new();
-
-                    if emotify_output.result != "Ok()" {
-                        push_error(emotify_output.data, &mut app);
-                    } else {
-                        mood = emotify_output.data[0].clone();
-                        learning = emotify_output.data[1].clone();
+                    Key::Backspace => {
+                        app.input.pop();
                     }
-                    app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
-                }
-                Key::Ctrl('h') => {
-                    app.caffeine += 1;
-                    //emotify call
-                    let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
 
-                    let mut mood = String::new();
-                    let mut learning = String::new();
+                    //- and i are blocked from use probably a terminal mapping
+                    Key::Ctrl('a') => {
+                        //binary_switch call
+                        let binary_output = VtoV_BridgeCall("binary_switch", app.mood.clone(), &mut app, &tx, &rx);
 
-                    if emotify_output.result != "Ok()" {
-                        push_error(emotify_output.data, &mut app);
-                    } else {
-                        mood = emotify_output.data[0].clone();
-                        learning = emotify_output.data[1].clone();
+                        if binary_output.result != "Ok()" {
+                            app.result.push(binary_output.data[0].clone());
+                        } else {
+                            app.mood = binary_output.data[0].clone().parse::<i64>().expect("failed to parse mood int from logic result");
+                        }
+                        //end binary_switch
+
+                        //emotify call
+                        let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
+
+                        let mut mood = String::new();
+                        let mut learning = String::new();
+
+                        if emotify_output.result != "Ok()" {
+                            push_error(emotify_output.data, &mut app);
+                        } else {
+                            mood = emotify_output.data[0].clone();
+                            learning = emotify_output.data[1].clone();
+                        }
+                        app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
+                        //end emotify
                     }
-                    app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
-                    //end emotify
-                }
-                Key::Ctrl('t') => {
-                    app.nicotine += 1;
-                    //emotify call
-                    let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
+                    Key::Ctrl('d') => {
+                        app.water += 1;
+                        //emotify call
+                        let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
 
-                    let mut mood = String::new();
-                    let mut learning = String::new();
+                        let mut mood = String::new();
+                        let mut learning = String::new();
 
-                    if emotify_output.result != "Ok()" {
-                        push_error(emotify_output.data, &mut app);
-                    } else {
-                        mood = emotify_output.data[0].clone();
-                        learning = emotify_output.data[1].clone();
+                        if emotify_output.result != "Ok()" {
+                            push_error(emotify_output.data, &mut app);
+                        } else {
+                            mood = emotify_output.data[0].clone();
+                            learning = emotify_output.data[1].clone();
+                        }
+                        app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
+                        //end emotify
                     }
-                    app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
-                    //end emotify
-                }
-                Key::Ctrl('n') => {
-                    app.thc += 1;
-                    //emotify call
-                    let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
+                    Key::Ctrl('f') => {
+                        app.alcohol += 1;
+                        //emotify call
+                        let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
 
-                    let mut mood = String::new();
-                    let mut learning = String::new();
+                        let mut mood = String::new();
+                        let mut learning = String::new();
 
-                    if emotify_output.result != "Ok()" {
-                        push_error(emotify_output.data, &mut app);
-                    } else {
-                        mood = emotify_output.data[0].clone();
-                        learning = emotify_output.data[1].clone();
+                        if emotify_output.result != "Ok()" {
+                            push_error(emotify_output.data, &mut app);
+                        } else {
+                            mood = emotify_output.data[0].clone();
+                            learning = emotify_output.data[1].clone();
+                        }
+                        app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
                     }
-                    app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
-                    //end emotify
-                }
-                Key::Ctrl('s') => {
-                    app.food += 1;
-                    //emotify call
-                    let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
+                    Key::Ctrl('h') => {
+                        app.caffeine += 1;
+                        //emotify call
+                        let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
 
-                    let mut mood = String::new();
-                    let mut learning = String::new();
+                        let mut mood = String::new();
+                        let mut learning = String::new();
 
-                    if emotify_output.result != "Ok()" {
-                        push_error(emotify_output.data, &mut app);
-                    } else {
-                        mood = emotify_output.data[0].clone();
-                        learning = emotify_output.data[1].clone();
+                        if emotify_output.result != "Ok()" {
+                            push_error(emotify_output.data, &mut app);
+                        } else {
+                            mood = emotify_output.data[0].clone();
+                            learning = emotify_output.data[1].clone();
+                        }
+                        app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
+                        //end emotify
                     }
-                    app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
-                    //end emotify
-                }
-                Key::Ctrl('o') => {
-                    //binary_switch call
-                    let binary_output = VtoV_BridgeCall("binary_switch", app.learning.clone(), &mut app, &tx, &rx);
+                    Key::Ctrl('t') => {
+                        app.nicotine += 1;
+                        //emotify call
+                        let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
 
-                    if binary_output.result != "Ok()" {
-                        app.result.push(binary_output.data[0].clone());
-                    } else {
-                        app.learning = binary_output.data[0].clone().parse::<i64>().expect("failed to parse learning int from logic result");
+                        let mut mood = String::new();
+                        let mut learning = String::new();
+
+                        if emotify_output.result != "Ok()" {
+                            push_error(emotify_output.data, &mut app);
+                        } else {
+                            mood = emotify_output.data[0].clone();
+                            learning = emotify_output.data[1].clone();
+                        }
+                        app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
+                        //end emotify
                     }
-                    //end binary_switch
+                    Key::Ctrl('n') => {
+                        app.thc += 1;
+                        //emotify call
+                        let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
 
-                    //emotify call
-                    let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
+                        let mut mood = String::new();
+                        let mut learning = String::new();
 
-                    let mut mood = String::new();
-                    let mut learning = String::new();
-
-                    if emotify_output.result != "Ok()" {
-                        app.result.push(emotify_output.data[0].clone());
-                    } else {
-                        mood = emotify_output.data[0].clone();
-                        learning = emotify_output.data[1].clone();
+                        if emotify_output.result != "Ok()" {
+                            push_error(emotify_output.data, &mut app);
+                        } else {
+                            mood = emotify_output.data[0].clone();
+                            learning = emotify_output.data[1].clone();
+                        }
+                        app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
+                        //end emotify
                     }
-                    app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
-                    //end emotify
-                }
-                Key::Ctrl('p') => {
-                    //change_project call
-                    let output_app = AtoA_BridgeCall("change_project", &mut app, &tx, &rx);
-                    app.tests = output_app.tests;
-                    app.state = output_app.state;
-                    app.selected = output_app.selected;
-                    push_error(output_app.result, &mut app);
-                    //end change_project
+                    Key::Ctrl('s') => {
+                        app.food += 1;
+                        //emotify call
+                        let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
 
+                        let mut mood = String::new();
+                        let mut learning = String::new();
 
-                    if app.tests == 0 {
-                        app.tests = app.test_map[&app.selected];
+                        if emotify_output.result != "Ok()" {
+                            push_error(emotify_output.data, &mut app);
+                        } else {
+                            mood = emotify_output.data[0].clone();
+                            learning = emotify_output.data[1].clone();
+                        }
+                        app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
+                        //end emotify
                     }
-                    
-                }
+                    Key::Ctrl('o') => {
+                        //binary_switch call
+                        let binary_output = VtoV_BridgeCall("binary_switch", app.learning.clone(), &mut app, &tx, &rx);
+
+                        if binary_output.result != "Ok()" {
+                            app.result.push(binary_output.data[0].clone());
+                        } else {
+                            app.learning = binary_output.data[0].clone().parse::<i64>().expect("failed to parse learning int from logic result");
+                        }
+                        //end binary_switch
+
+                        //emotify call
+                        let emotify_output = AtoV_BridgeCall("emotify", &mut app, &tx, &rx);
+
+                        let mut mood = String::new();
+                        let mut learning = String::new();
+
+                        if emotify_output.result != "Ok()" {
+                            app.result.push(emotify_output.data[0].clone());
+                        } else {
+                            mood = emotify_output.data[0].clone();
+                            learning = emotify_output.data[1].clone();
+                        }
+                        app.flags = format!("{} • 💧{} ☕{} 🚬{} 🍁{} 🍞{} 🥃{} • {}", mood, app.water, app.caffeine, app.nicotine, app.thc, app.food, app.alcohol, learning);
+                        //end emotify
+                    }
+                    Key::Ctrl('p') => {
+                        //change_project call
+                        let output_app = AtoA_BridgeCall("change_project", &mut app, &tx, &rx);
+                        app.tests = output_app.tests;
+                        app.state = output_app.state;
+                        app.selected = output_app.selected;
+                        push_error(output_app.result, &mut app);
+                        //end change_project
+
+
+                        if app.tests == 0 {
+                            app.tests = app.test_map[&app.selected];
+                        }
+                        
+                    }
+                    _ => {}
+                },
                 _ => {}
-            },
-            _ => {}
+            }
         }
     }
-    
 }
 
 //BridgeCall can be app to app, app to value and value to value
@@ -569,4 +571,6 @@ fn push_error(results: Vec<String>, app: &mut App) {
         }
     }
 }
+
+
 

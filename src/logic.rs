@@ -1,5 +1,6 @@
 use super::*;
 
+/*
 fn download(data: &String) -> BridgeResult {
 
 }
@@ -15,6 +16,7 @@ fn copy_from_usb(data: &String) -> BridgeResult {
 fn copy_to_usb(data: &String) -> BridgeResult {
 
 }
+*/
 
 //rules for db
 // must use username from projects.txt
@@ -26,10 +28,6 @@ fn copy_to_usb(data: &String) -> BridgeResult {
 // should error gracefully into results
 // might make it so we copy to usb in the event that internet is not working
 // and usb should error gracefully with "please insert a usb drive to sync locally"
-//client_id = 443395704515-u7hce21564ts1fupurbi5u0ndblvtfst.apps.googleusercontent.com
-//client_secret = 9gWsF054pfXKjUjdBR-T0A-j
-//we also have the json file in the src directory here
-//clock.db id = 1c4Kwl9FnES4GZ1yX3fPqG8m0CYojgus7
 
 
 
@@ -645,6 +643,7 @@ fn count_tests(project: &Projects, selected: &String) -> (BridgeResult, HashMap<
             if lines.contains(&"there was an error unwrapping the source line".to_string()) {
                 return (BridgeResult::err("there was a error inside a closure", "error unwrapping line of source in count tests"), test_map)
             }
+//there is an index error that throws after attempting to count this file with a working clock
             let mut line_index = 0;
             'lines: loop {
                 if lines[line_index].contains("/*") {

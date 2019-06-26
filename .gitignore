@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+inferno-collapse-perf
+inferno-flamegraph
+perf.data
+perf.data.old
