@@ -21,4 +21,8 @@ hyper = "^0.10"
 hyper-rustls = "^0.6"
 yup-oauth2 = "^1.0"
 self_update = "0.5.1"
+openssl-sys = "*"
+
+[features]
+vendored = ["openssl-sys/vendored"]
 
